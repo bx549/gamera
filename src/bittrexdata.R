@@ -1,9 +1,8 @@
 ## collect order book data and trade data from Bittrex
-require(httr)
-require(jsonlite)
-source("bittrexapi.R")
+source("~/mega/gamera/src/bittrexapi.R")
 
 mkt <- "BTC-XRP"              # the trade pair
+outputdir <- "~/btc-xrp/"     # output files go here
 interval <- 10                # granularity in seconds
 seconds.per.day <- 24*60*60
 n <- seconds.per.day/interval # number of data collections per day
@@ -85,15 +84,15 @@ for (i in 1:(n*days)) {
     
     ## write results to disk every 100 iterations
     if (i %% 100 == 0) {
-        write.table(Buy, file="/home/darin/tmp/Buy.csv", sep=",",
+        write.table(Buy, file=paste(outputdir, "Buy.csv", sep=""), sep=",",
                     quote=FALSE, row.names=FALSE, col.names=(i==100), append=TRUE)
-        write.table(Sell, file="/home/darin/tmp/Sell.csv", sep=",",
+        write.table(Sell, file=paste(outputdir, "Sell.csv", sep=""), sep=",",
                     quote=FALSE, row.names=FALSE, col.names=(i==100), append=TRUE)
         rm(Buy)   # free memory
         rm(Sell)
         ## Trade is kept in memory so no appending, just overwrite
         ## existing file
-        write.table(Trade, file="/home/darin/tmp/Trade.csv", sep=",", quote=FALSE,
+        write.table(Trade, file=paste(outputdir, "Trade.csv", sep=""), sep=",", quote=FALSE,
                     row.names=FALSE)
         cat("checkpoint completed at iteration", i, "of", n*days, "\n")
     }
