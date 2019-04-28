@@ -1,3 +1,5 @@
+## this file contains wrapper functions for the Bittrex API
+
 library(httr)
 library(jsonlite)
 
