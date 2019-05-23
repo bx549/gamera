@@ -10,8 +10,6 @@ library(tidyverse)
 library(lubridate)
 source("finlib.R")
 
-exchange <- "bittrex"   # "bittrex" or "kraken"
-
 ## read raw data
 mkthistoryfile <- paste(datadir, "Trade.csv", sep="")
 buyorderbookfile <- paste(datadir, "Buy.csv", sep="")
@@ -23,13 +21,24 @@ Trade <- read.csv(mkthistoryfile, as.is=TRUE)
 if (exchange == "bittrex") {
     Trade$ts <- as.POSIXct(substr(Trade$TimeStamp, 1, 19),
                            "%Y-%m-%dT%H:%M:%S", tz="GMT")
-} else {
+} else {  # kraken
     Trade$ts <- as.POSIXct(Trade$TimeStamp,
                            "%Y-%m-%d %H:%M:%S", tz="GMT")
 }
+Trade$TimeStamp <- NULL   # no longer needed
 
-stopifnot(length(unique(Trade$Id)) == nrow(Trade))
 ## there should be no duplicates
+## remove any duplicate trades. this should not happen, but it happened once.
+## for now let's handles this case-by-case
+if (length(unique(Trade$Id)) != nrow(Trade)) {
+    warn("duplicate trades detected!")
+    dups <- duplicates(Trade$Id)
+    for (d in dups) {
+        idx <- which(Trade$Id == d)
+        omit <- idx[-length(idx)] # indices to omit, all but the last
+        Trade <- Trade[-omit,]
+    }
+}
 
 ## put the data frame in increasing chronological order
 Trade <- arrange(Trade, ts)
@@ -81,34 +90,37 @@ Sell.summary <- Sell %>%
 stopifnot(all(Buy.summary$ts == Sell.summary$ts))
 Obook <- cbind(Buy.summary, select(Sell.summary, -ts))
 
+rm(Buy)
+rm(Sell)
+
 ## derive some variables from the orderbook data
 Obook$spread <- with(Obook, ask-bid)
 Obook$midprice <- with(Obook, bid + spread/2)
 
 ## pass in a time t and vector of times x. return TRUE/FALSE indicator
 ## of all times within the last interval minutes
-get.time.ind <- function(t, x, interval=10) {
+get.time.ind <- function(t, x, interval=1) {
     nsec <- interval*60
     diffs <- as.numeric(t - x)
     0 <= diffs & diffs <= nsec 
 }
 
 ## compute the net order flow, which is the difference between the volume
-## of buy and sell MOs and LOs during the last 10 minutes.
+## of buy and sell MOs and LOs during the last minute.
 Obook$buy.volume <- numeric(nrow(Obook))
 Obook$sell.volume <- numeric(nrow(Obook))
 Obook$net.order.flow <- numeric(nrow(Obook))
 
 if (exchange == "bittrex") {
     for (i in 1:nrow(Obook)) {
-        time.idx <- get.time.ind(Obook$ts[i], Trade$ts, 10)
+        time.idx <- get.time.ind(Obook$ts[i], Trade$ts, 1)
         Obook$buy.volume[i]  <- with(Trade, sum(Quantity[OrderType=="BUY" & time.idx]))
         Obook$sell.volume[i] <- with(Trade, sum(Quantity[OrderType=="SELL" & time.idx]))
         Obook$net.order.flow[i] <- with(Obook, buy.volume[i] - sell.volume[i])
     }
-} else { # exchange data is from kraken
+} else { # data is from kraken
     for (i in 1:nrow(Obook)) {
-        time.idx <- get.time.ind(Obook$ts[i], Trade$ts, 10)
+        time.idx <- get.time.ind(Obook$ts[i], Trade$ts, 1)
         Obook$buy.volume[i]  <- with(Trade, sum(Quantity[Type1=="b" & time.idx]))
         Obook$sell.volume[i] <- with(Trade, sum(Quantity[Type1=="s" & time.idx]))
         Obook$net.order.flow[i] <- with(Obook, buy.volume[i] - sell.volume[i])
@@ -124,15 +136,17 @@ Obook$delta.sell.dist <- with(Obook, sell.dist - lag(sell.dist))
 
 ## we will need the actual time between successive observations
 Obook$ts.diff <- c(NA, diff(Obook$ts))
-Obook$delta.bid <- with(Obook, ifelse(20 <= ts.diff & ts.diff <= 40,
+Obook$delta.bid <- with(Obook, ifelse(granularity-5 <= ts.diff & ts.diff <= granularity+5,
                               bid - lag(bid), NA))
-Obook$delta.ask <- with(Obook, ifelse(20 <= ts.diff & ts.diff <= 40,
+Obook$delta.ask <- with(Obook, ifelse(granularity-5 <= ts.diff & ts.diff <= granularity+5,
                               ask - lag(ask), NA))
 
 ## some plots
 if (0) {
     ggplot(Obook, aes(x=ts)) + geom_line(aes(y=delta.bid))
     ggplot(Trade, aes(x=ts)) + geom_line(aes(y=Price))
+    ggplot(Obook) + geom_histogram(aes(x=delta.ask), binwidth=1)
+    
 }
 
 
