@@ -138,10 +138,12 @@ for (i in 1:(n*days)) {
 
         if (nrow(Trade.tmp)) {
             if (exists("Trade")) {
-                old.idx <- match(Trade$Id, Trade.tmp$Id)   # already present in Trade
+                old.idx <- match(Trade$Id, Trade.tmp$Id)
+                                        # already present in Trade
                 new.idx <- setdiff(1:nrow(Trade.tmp), old.idx)
                 if (length(new.idx)) {
-                    Trade <- rbind(Trade.tmp[new.idx,], Trade) # add new trades only
+                    Trade <- rbind(Trade.tmp[new.idx,], Trade)
+                                        # add new trades only
                 }
             } else {
                 Trade <- Trade.tmp
@@ -151,16 +153,18 @@ for (i in 1:(n*days)) {
 
     ## write results to disk every 100 iterations
     if (i %% 100 == 0) {
-        write.table(Buy, file=paste(output.dir, buy.orders.filename, sep=""), sep=",",
-                    quote=FALSE, row.names=FALSE, col.names=(i==100), append=TRUE)
-        write.table(Sell, file=paste(output.dir, sell.orders.filename, sep=""), sep=",",
-                    quote=FALSE, row.names=FALSE, col.names=(i==100), append=TRUE)
+        write.table(Buy, file=paste(output.dir, buy.orders.filename, sep=""),
+                    sep=",", quote=FALSE, row.names=FALSE,
+                    col.names=(i==100), append=TRUE)
+        write.table(Sell, file=paste(output.dir, sell.orders.filename, sep=""),
+                    sep=",", quote=FALSE, row.names=FALSE,
+                    col.names=(i==100), append=TRUE)
         rm(Buy)   # free memory
         rm(Sell)
         ## Trade is kept in memory so no appending, just overwrite
         ## existing file
         write.table(Trade, file=paste(output.dir, recent.trades.filename, sep=""),
-                    sep=",", quote=FALSE, row.names=FALSE)
+                    sep=",", quote=FALSE, row.names=FALSE, append=FALSE)
         cat("checkpoint completed at iteration", i, "of", n*days, "\n")
     }
     
