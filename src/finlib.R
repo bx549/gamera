@@ -1,6 +1,18 @@
 ## this file contains some functions that may be helpful
 ## for finance-related tasks
 
+## TRUE indicates elements of x not present in table
+"%nin%"    <- function(x, table) match(x, table, nomatch = 0) == 0
+
+duplicates <- function(x) names(table(x))[table(x)>1]
+
+num.nas  <- function(x) length(x[is.na(x)]) 
+none     <- function(...) !any(...)
+
+remove.trailing <- function(x) sub("\\s+$", "", x, perl=TRUE)
+empty2NA <- function(x) { x[x==""] <- NA; x }
+space2NA <- function(x) sub(" ", NA, x)
+
 ## future value of a series of payments
 ## x is the amount payed each period
 ## r is the interest rate per period, which is the yearly rate
