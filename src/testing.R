@@ -1,49 +1,67 @@
 ## prep-data.R with testing datadir
 datadir <- "~/Downloads/data/test/"
+exchange <- "kraken"   # "bittrex" or "kraken"
+granularity <- 10
 source("prep-data.R")
 
-## make predictions on out-of-sample data
-pred.bid.up <- predict(fm.bid.up, newdata=Obook, type="response") > .4
+range(Obook$ts)  # check the date range
 
-summary(pred.bid.up)
+## make predictions on out-of-sample data.
+## the model should be saved from training.R
+load("fm.rda")
+pred.bid <- predict(fm.bid, newdata=Obook, type="response")
+Obook$pred.bid <- pred.bid
+actual <- Obook$delta.bid
 
-## measure out-of-sample overall error rate
-mean(pred.bid.up != (Obook$delta.bid>0), na.rm=TRUE)
-
-## measure out-of-sample false positive error rate
-sum(pred.bid.up==TRUE & (Obook$delta.bid>0)==FALSE, na.rm=TRUE)/
-    sum((Obook$delta.bid>0)==FALSE, na.rm=TRUE)
+ggplot(Obook) + geom_histogram(aes(x=pred.bid-actual))
 
 ## test the trading strategy
-mkt <- "BTC-XRP"
-xrpbal <- 100
-btcbal <- 0.00100000  # 100000 satoshis
-qty <- 1        # quantity of xrp to buy/sell
-state <- "none"   # long, short, or none
+mkt <- "XBT-USD"
+usdbal <- 500
+btcbal <- 0
+qty <- 0.0005000  # quantity of BTC to buy/sell = 5000 satoshis
+position <- 0   # -1, 0, or +1
 profit <- 0
+basis <- c()
 n <- nrow(Obook)
-for (i in 3:n) {
-    if (xrpbal < 1 || btcbal < 0.00001000) {
+
+for (i in 1:n) {
+    if (is.na(Obook$pred.bid[i])) {
+        next
+    }
+    
+    if (usdbal < 50) {
         message("stop trading due to low balance")
         break
     }
+    
     bid <- Obook$bid[i]
     ask <- Obook$ask[i]
-    if (pred.bid.up[i] && state=="none") {
-        ## buy qty xrp at market ask price
-        xrpbal <- xrpbal + 1
-        btcbal <- btcbal - ask
-        state <- "long"
-        basis <- ask
-        message("purchased ", qty, " xrp at ", ask)
+    pred <- pred.bid[i]
+    spread <- Obook$spread[i]
+
+    if (pred > 0 && pred > spread && position <= 0) {
+        ## buy qty btc at ask price
+        btcbal <- btcbal + qty
+        usdbal <- usdbal - ask * qty
+        position <- position + 1
+        message("purchased ", qty, " btc at ", ask)
+        basis <- c(ask, basis)  # lifo
     }
-    if (state == "long" && bid > basis) {
-        ## sell qty xrp at market bid price
-        xrpbal <- xrpbal - 1
-        btcbal <- btcbal + bid
-        profit <- profit + bid - basis
-        state <- "none"
-        message("sold ", qty, " xrp at ", bid)
+
+    if (pred < 0 && abs(pred) > spread && position >= 0 && btcbal >= qty) {
+        ## sell qty btc at bid price
+        btcbal <- btcbal - qty
+        usdbal <- usdbal + bid * qty
+        position <- position - 1
+        message("sold ", qty, " btc at ", bid)
+        stopifnot(length(basis) >= 1)
+        profit  <- profit + (bid - basis[1])*qty # lifo
+        basis <- basis[-1]
     }
+    
 }
 
+rng <- range(Obook$ts)
+t <- as.numeric(rng[2] - rng[1])
+message("profit is $", round(profit, 2), " over ", round(t, 1), " days.")
