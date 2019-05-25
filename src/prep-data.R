@@ -27,7 +27,7 @@ if (exchange == "bittrex") {
 }
 Trade$TimeStamp <- NULL   # no longer needed
 
-## there should be no duplicates
+## there should be no duplicates.
 ## remove any duplicate trades. this should not happen, but it happened once.
 ## for now let's handles this case-by-case
 if (length(unique(Trade$Id)) != nrow(Trade)) {
@@ -134,7 +134,9 @@ if (exchange == "bittrex") {
 Obook$delta.buy.dist <- with(Obook, buy.dist - lag(buy.dist))
 Obook$delta.sell.dist <- with(Obook, sell.dist - lag(sell.dist))
 
-## we will need the actual time between successive observations
+## we will need the actual time between successive observations because
+## the time step is <granularity> seconds, but sometimes the data collection
+## script misses a time step. 
 Obook$ts.diff <- c(NA, diff(Obook$ts))
 Obook$delta.bid <- with(Obook, ifelse(granularity-5 <= ts.diff & ts.diff <= granularity+5,
                               bid - lag(bid), NA))

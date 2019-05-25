@@ -1,4 +1,5 @@
-## prep-data.R with testing datadir
+## script to read testing data and execute the trading strategy
+##
 datadir <- "~/Downloads/data/test/"
 exchange <- "kraken"   # "bittrex" or "kraken"
 granularity <- 10
