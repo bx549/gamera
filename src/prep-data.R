@@ -138,17 +138,24 @@ Obook$delta.sell.dist <- with(Obook, sell.dist - lag(sell.dist))
 ## the time step is <granularity> seconds, but sometimes the data collection
 ## script misses a time step. 
 Obook$ts.diff <- c(NA, diff(Obook$ts))
+
+if (0) {
 Obook$delta.bid <- with(Obook, ifelse(granularity-5 <= ts.diff & ts.diff <= granularity+5,
                               bid - lag(bid), NA))
 Obook$delta.ask <- with(Obook, ifelse(granularity-5 <= ts.diff & ts.diff <= granularity+5,
-                              ask - lag(ask), NA))
+                                      ask - lag(ask), NA))
+}
+
+## try using a rate
+Obook$delta.bid <- with(Obook, (bid - lag(bid))/ts.diff)
+Obook$delta.ask <- with(Obook, (ask - lag(ask))/ts.diff)
 
 ## some plots
 if (0) {
-    ggplot(Obook, aes(x=ts)) + geom_line(aes(y=delta.bid))
     ggplot(Trade, aes(x=ts)) + geom_line(aes(y=Price))
+    ggplot(Obook) + geom_histogram(aes(x=delta.bid), binwidth=1)
     ggplot(Obook) + geom_histogram(aes(x=delta.ask), binwidth=1)
-    
+    ggplot(Obook) + geom_histogram(aes(x=sell.volume), binwidth=1)
 }
 
 
