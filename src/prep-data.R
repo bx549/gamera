@@ -109,30 +109,25 @@ n <- nrow(Obook)
 Obook$buy.volume <- numeric(n)
 Obook$sell.volume <- numeric(n)
 Obook$net.order.flow <- numeric(n)
-Obook$arr.rate <- integer(n)
-Obook$dep.rate <- integer(n)
+Obook$buy.rate <- integer(n)   # number of market buys per minute (at the ask)
+Obook$sell.rate <- integer(n)  # number of market sells per minute (at the bid)
 
 for (i in 1:n) {
     ## compute buy/sell volume over the last 60 seconds
+    ## compute buy/sell rate. orders per minute
     t2 <- Obook$ts[i]
     t1 <- t2 - 60
     time.idx1 <- get.time.ind(t1, t2, Trade$ts)
     if (exchange == "bittrex") {
+        stop("cannot compute buy/sell rate")
         Obook$buy.volume[i]  <- with(Trade, sum(Quantity[OrderType=="BUY" & time.idx1]))
         Obook$sell.volume[i] <- with(Trade, sum(Quantity[OrderType=="SELL" & time.idx1]))
     } else { # data is from kraken
         Obook$buy.volume[i]  <- with(Trade, sum(Quantity[Type1=="b" & time.idx1]))
         Obook$sell.volume[i] <- with(Trade, sum(Quantity[Type1=="s" & time.idx1]))
+        Obook$buy.rate[i] <- with(Trade, length(Id[Type1=="b" & Type2=="m" & time.idx1]))
+        Obook$sell.rate[i] <- with(Trade, length(Id[Type1=="s" & Type2=="m" & time.idx1]))
     }
-
-    ## arrival rate and departure rate at the bid over the last 60 seconds
-    ## the time goes t0 -> t1 -> t2 with 60 seconds in between
-    t0 <- t1 - 60
-    time.idx2 <- get.time.ind(t0, t1, Trade$ts)
-    arr <- with(Trade, setdiff(Id[time.idx2], Id[time.idx1]))
-    dep <- with(Trade, setdiff(Id[time.idx1], Id[time.idx2]))
-    Obook$arr.rate[i] <- length(arr) # arrrivals per minute
-    Obook$dep.rate[i] <- length(dep) # departures per minute
 }
 Obook$net.order.flow <- with(Obook, buy.volume - sell.volume)
 
@@ -156,11 +151,8 @@ if (0) {
 
     ggplot(Obook) + geom_histogram(aes(x=delta.bid), binwidth=1)
     ggplot(Obook) + geom_histogram(aes(x=buy.volume), binwidth=1)
-    ggplot(Obook) + geom_histogram(aes(x=arr.rate), binwidth=1)
+    ggplot(Obook) + geom_histogram(aes(x=sell.rate), binwidth=1)
 
-    ggplot(Obook) + geom_line(aes(x=ts, y=arr.rate))
     ggplot(Obook) + geom_line(aes(x=ts, y=net.order.flow))
     ggplot(Obook) + geom_line(aes(x=ts, y=spread))
-
-    ggplot(Obook) + geom_point(aes(x=arr.rate, y=delta.buy.dist))
 }

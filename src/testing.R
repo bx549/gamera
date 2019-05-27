@@ -5,7 +5,6 @@ exchange <- "kraken"   # "bittrex" or "kraken"
 granularity <- 10      # seconds
 #source("prep-data.R")
 load("prep-data-testing-xbt-usd.rda")
-
 range(Obook$ts)  # check the date range
 
 ## make predictions on out-of-sample data.
@@ -13,7 +12,8 @@ range(Obook$ts)  # check the date range
 load("fm.lm.rda")
 
 ## scale the response and the predictor variables
-X <- subset(Obook, select=c("delta.bid","net.order.flow","delta.buy.dist","arr.rate","spread"))
+X <- subset(Obook, select=c("delta.bid","net.order.flow","delta.buy.dist",
+                            "buy.rate","sell.rate","spread"))
 X <- as.data.frame(scale(X))
 
 pred <- predict(fm.lm, newdata=X)
@@ -23,14 +23,17 @@ pred <- predict(fm.lm, newdata=X)
 mkt <- "XBT-USD"
 usdbal <- 500
 btcbal <- 0
-qty <- 0.005000  # quantity of BTC to buy/sell = 50000 satoshis
+qty <- 0.005000 # quantity of BTC to buy/sell = 50000 satoshis
 position <- 0   # -1, 0, or +1
 profit <- 0
 basis <- c()
 n <- nrow(Obook)
+stopifnot(nrow(X) == nrow(Obook))
 n.buys <- 0
 n.sells <- 0
 losses <- 0
+sigma <- sd(pred, na.rm=TRUE)
+mu <- mean(pred, na.rm=TRUE)
 
 for (i in 1:n) {
     if (is.na(pred[i])) {
@@ -39,7 +42,9 @@ for (i in 1:n) {
     
     bid <- Obook$bid[i]
     ask <- Obook$ask[i]
-    pred.delta <- pred[i]*granularity # prediction is rate of change in bid (i.e. per second)
+    pred.delta <- ((pred[i]*sigma)+mu)*granularity
+    ## put the prediction back on the scale of the data.
+    ## prediction is rate of change in bid (i.e. per second).
     threshold <- Obook$spread[i]      # ? what to use for the threshold ?
 
     if (pred.delta > 0 && pred.delta > threshold && position <= 0) {

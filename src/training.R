@@ -1,3 +1,5 @@
+## fit a predictive model
+##
 datadir <- "~/Downloads/data/train/"
 exchange <- "kraken"   # "bittrex" or "kraken"
 granularity <- 10
@@ -7,12 +9,13 @@ range(Obook$ts)  # check the date range
 
 
 ## scale the response and the predictor variables
-X <- subset(Obook, select=c("delta.bid","net.order.flow","delta.buy.dist","arr.rate","spread"))
+X <- subset(Obook, select=c("delta.bid","net.order.flow","delta.buy.dist",
+                            "buy.rate","sell.rate","spread"))
 X <- as.data.frame(scale(X))
 
 ## pay attention to the time step! the response variable is lead(.).
 ## remember that the delta.bid is a rate of $ per second
-fm.lm <- lm(lead(delta.bid) ~ delta.bid + net.order.flow + delta.buy.dist + arr.rate + spread, data=X)
+fm.lm <- lm(lead(delta.bid) ~ delta.bid + net.order.flow + delta.buy.dist + spread, data=X)
 summary(fm.lm)
 
 # diagnostics for the regression model
