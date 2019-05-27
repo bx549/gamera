@@ -3,8 +3,8 @@
 datadir <- "~/Downloads/data/test/"
 exchange <- "kraken"   # "bittrex" or "kraken"
 granularity <- 10      # seconds
-source("prep-data.R")
-#load("prep-data-testing-xbt-usd.rda")
+#source("prep-data.R")
+load("prep-data-testing-xbt-usd.rda")
 
 range(Obook$ts)  # check the date range
 
@@ -12,7 +12,11 @@ range(Obook$ts)  # check the date range
 ## the model should be saved from training.R
 load("fm.lm.rda")
 
-pred <- predict(fm.lm, newdata=Obook)
+## scale the response and the predictor variables
+X <- subset(Obook, select=c("delta.bid","net.order.flow","delta.buy.dist","arr.rate","spread"))
+X <- as.data.frame(scale(X))
+
+pred <- predict(fm.lm, newdata=X)
 
 ## test the trading strategy
 
