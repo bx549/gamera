@@ -4,21 +4,18 @@ datadir <- "~/Downloads/data/test/"
 exchange <- "kraken"   # "bittrex" or "kraken"
 granularity <- 10      # seconds
 source("prep-data.R")
+#load("prep-data-testing-xbt-usd.rda")
 
 range(Obook$ts)  # check the date range
 
 ## make predictions on out-of-sample data.
 ## the model should be saved from training.R
-load("fm.rda")
-pred.bid <- predict(fm.bid, newdata=Obook, type="response")
-Obook$pred.bid <- pred.bid
+load("fm.lm.rda")
 
-ggplot(Obook) +
-    geom_point(aes(x=lead(delta.bid), y=pred.bid)) +
-    labs(title="change in bid (per second)", x="actual values", y="fitted values")
+pred <- predict(fm.lm, newdata=Obook)
 
 ## test the trading strategy
-##
+
 mkt <- "XBT-USD"
 usdbal <- 500
 btcbal <- 0
@@ -30,19 +27,18 @@ n <- nrow(Obook)
 n.buys <- 0
 n.sells <- 0
 losses <- 0
-threshold <- median(Obook$spread)/2
 
 for (i in 1:n) {
-    if (is.na(Obook$pred.bid[i])) {
+    if (is.na(pred[i])) {
         next
     }
     
     bid <- Obook$bid[i]
     ask <- Obook$ask[i]
-    pred <- pred.bid[i]*granularity   # prediction is rate of change in bid (i.e. per second)
+    pred.delta <- pred[i]*granularity # prediction is rate of change in bid (i.e. per second)
     threshold <- Obook$spread[i]      # ? what to use for the threshold ?
 
-    if (pred > 0 && pred > threshold && position <= 0) {
+    if (pred.delta > 0 && pred.delta > threshold && position <= 0) {
         ## buy qty btc at ask price
         btcbal <- btcbal + qty
         usdbal <- usdbal - ask * qty
@@ -52,7 +48,7 @@ for (i in 1:n) {
         n.buys <- n.buys + 1
     }
 
-    if (pred < 0 && abs(pred) > threshold && position >= 0 && btcbal >= qty) {
+    if (pred.delta < 0 && abs(pred.delta) > threshold && position >= 0 && btcbal >= qty) {
         ## sell qty btc at bid price
         btcbal <- btcbal - qty
         usdbal <- usdbal + bid * qty
@@ -61,11 +57,10 @@ for (i in 1:n) {
         stopifnot(length(basis) >= 1)
         this.profit <- (bid - basis[1])*qty  # we sold at the bid price, LIFO accounting
         profit  <- profit + this.profit      # accumulate total profit/loss
-        basis <- basis[-1]                   # get rid of this basis
+        basis <- basis[-1]                   # get rid of this cost basis
         n.sells <- n.sells + 1
-        losses <- losses + ifelse(this.profit < 0, 1, 0)   # count number of losing trades
+        losses <- losses + ifelse(this.profit < 0, 1, 0) # count number of losing trades
     }
-    
 }
 
 t <- diff(range(Obook$ts))

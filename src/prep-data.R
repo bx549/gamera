@@ -31,7 +31,7 @@ Trade$TimeStamp <- NULL   # no longer needed
 ## remove any duplicate trades. this should not happen, but it happened once.
 ## for now let's handles this case-by-case
 if (length(unique(Trade$Id)) != nrow(Trade)) {
-    warn("duplicate trades detected!")
+    warning("duplicate trades detected!")
     dups <- duplicates(Trade$Id)
     for (d in dups) {
         idx <- which(Trade$Id == d)
@@ -97,38 +97,45 @@ rm(Sell)
 Obook$spread <- with(Obook, ask-bid)
 Obook$midprice <- with(Obook, bid + spread/2)
 
-## pass in a time t and vector of times x. return TRUE/FALSE indicator
-## of all times within the last interval minutes
-get.time.ind <- function(t, x, interval=1) {
-    nsec <- interval*60
-    diffs <- as.numeric(t - x)
-    0 <= diffs & diffs <= nsec 
+## pass in times t1 and t2 and vector of times x. return TRUE/FALSE indicator
+## of all times between t1 and t2. note that t1 < t2.
+get.time.ind <- function(t1, t2, x) {
+    t1 <= x & x <= t2
 }
 
 ## compute the net order flow, which is the difference between the volume
 ## of buy and sell MOs and LOs during the last minute.
-Obook$buy.volume <- numeric(nrow(Obook))
-Obook$sell.volume <- numeric(nrow(Obook))
-Obook$net.order.flow <- numeric(nrow(Obook))
+n <- nrow(Obook)
+Obook$buy.volume <- numeric(n)
+Obook$sell.volume <- numeric(n)
+Obook$net.order.flow <- numeric(n)
+Obook$arr.rate <- integer(n)
+Obook$dep.rate <- integer(n)
 
-if (exchange == "bittrex") {
-    for (i in 1:nrow(Obook)) {
-        time.idx <- get.time.ind(Obook$ts[i], Trade$ts, 1)
-        Obook$buy.volume[i]  <- with(Trade, sum(Quantity[OrderType=="BUY" & time.idx]))
-        Obook$sell.volume[i] <- with(Trade, sum(Quantity[OrderType=="SELL" & time.idx]))
-        Obook$net.order.flow[i] <- with(Obook, buy.volume[i] - sell.volume[i])
+for (i in 1:n) {
+    ## compute buy/sell volume over the last 60 seconds
+    t2 <- Obook$ts[i]
+    t1 <- t2 - 60
+    time.idx1 <- get.time.ind(t1, t2, Trade$ts)
+    if (exchange == "bittrex") {
+        Obook$buy.volume[i]  <- with(Trade, sum(Quantity[OrderType=="BUY" & time.idx1]))
+        Obook$sell.volume[i] <- with(Trade, sum(Quantity[OrderType=="SELL" & time.idx1]))
+    } else { # data is from kraken
+        Obook$buy.volume[i]  <- with(Trade, sum(Quantity[Type1=="b" & time.idx1]))
+        Obook$sell.volume[i] <- with(Trade, sum(Quantity[Type1=="s" & time.idx1]))
     }
-} else { # data is from kraken
-    for (i in 1:nrow(Obook)) {
-        time.idx <- get.time.ind(Obook$ts[i], Trade$ts, 1)
-        Obook$buy.volume[i]  <- with(Trade, sum(Quantity[Type1=="b" & time.idx]))
-        Obook$sell.volume[i] <- with(Trade, sum(Quantity[Type1=="s" & time.idx]))
-        Obook$net.order.flow[i] <- with(Obook, buy.volume[i] - sell.volume[i])
-    }
+
+    ## arrival rate and departure rate at the bid over the last 60 seconds
+    ## the time goes t0 -> t1 -> t2 with 60 seconds in between
+    t0 <- t1 - 60
+    time.idx2 <- get.time.ind(t0, t1, Trade$ts)
+    arr <- with(Trade, setdiff(Id[time.idx2], Id[time.idx1]))
+    dep <- with(Trade, setdiff(Id[time.idx1], Id[time.idx2]))
+    Obook$arr.rate[i] <- length(arr) # arrrivals per minute
+    Obook$dep.rate[i] <- length(dep) # departures per minute
 }
+Obook$net.order.flow <- with(Obook, buy.volume - sell.volume)
 
-## what data will be available at the time the prediction is made?
-## don't cheat!
 ## a positive value for buy.dist.delta/sell.dist.delta means that the
 ## buy.dist/sell.dist has moved further away from the bid/ask.
 Obook$delta.buy.dist <- with(Obook, buy.dist - lag(buy.dist))
@@ -139,23 +146,21 @@ Obook$delta.sell.dist <- with(Obook, sell.dist - lag(sell.dist))
 ## script misses a time step. 
 Obook$ts.diff <- c(NA, diff(Obook$ts))
 
-if (0) {
-Obook$delta.bid <- with(Obook, ifelse(granularity-5 <= ts.diff & ts.diff <= granularity+5,
-                              bid - lag(bid), NA))
-Obook$delta.ask <- with(Obook, ifelse(granularity-5 <= ts.diff & ts.diff <= granularity+5,
-                                      ask - lag(ask), NA))
-}
-
-## try using a rate
+## try using a rate of change (i.e. per second)
 Obook$delta.bid <- with(Obook, (bid - lag(bid))/ts.diff)
 Obook$delta.ask <- with(Obook, (ask - lag(ask))/ts.diff)
 
 ## some plots
 if (0) {
     ggplot(Trade, aes(x=ts)) + geom_line(aes(y=Price))
+
     ggplot(Obook) + geom_histogram(aes(x=delta.bid), binwidth=1)
-    ggplot(Obook) + geom_histogram(aes(x=delta.ask), binwidth=1)
-    ggplot(Obook) + geom_histogram(aes(x=sell.volume), binwidth=1)
+    ggplot(Obook) + geom_histogram(aes(x=buy.volume), binwidth=1)
+    ggplot(Obook) + geom_histogram(aes(x=arr.rate), binwidth=1)
+
+    ggplot(Obook) + geom_line(aes(x=ts, y=arr.rate))
+    ggplot(Obook) + geom_line(aes(x=ts, y=net.order.flow))
+    ggplot(Obook) + geom_line(aes(x=ts, y=spread))
+
+    ggplot(Obook) + geom_point(aes(x=arr.rate, y=delta.buy.dist))
 }
-
-
